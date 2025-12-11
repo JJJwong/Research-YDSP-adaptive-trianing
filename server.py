@@ -79,6 +79,10 @@ def select_difficulty(theta_hat,a,target_p=0.7,min_raw=1,max_raw=100):
     b_scaled = np.clip(b_scaled,-3,3)
     return unscale_difficulty(b_scaled,min_raw,max_raw)
 
+def update_skill(success_extent, raw_difficulty, theta_hat):
+  scaled_difficulty = scale_difficulty(raw_difficulty)
+  return map_update_theta(theta_hat, a, scaled_difficulty, success_extent, mu0=theta_hat, sigma0=1)
+
 # ----------------------------
 # Flask routes
 # ----------------------------
@@ -87,6 +91,12 @@ def fuzzy_update():
     data = request.json
     difficulty = float(data["difficulty"])
     score = float(data["score"])
+    theta_hat = float(data["theta_hat"])
+    success_extent = 0.5+(score-35)/40;
+    success_extent = min(success_extent,1)
+    success_extent = max(success_extent,0)
+    
+    new_skill = update_skill(success_extent, difficulty, theta_hat)
 
     # --- Fuzzy logic adjustment ---
     diff_change.input["performance_input"] = score
@@ -96,17 +106,20 @@ def fuzzy_update():
     new_difficulty = difficulty + fuzzy_adjust
     new_difficulty = max(1, min(new_difficulty, 100))
 
-    return jsonify({"new_difficulty": new_difficulty})
+    return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill})
 
 @app.route("/irt_update", methods=["POST"])
 def irt_update():
     data = request.json
+    difficulty = float(data["difficulty"])
+    score = float(data["score"])
     theta_hat = float(data["theta_hat"])
-    a = float(data.get("a", 1.0))
-    target_p = float(data.get("target_p", 0.7))
-    min_raw = float(data.get("min_raw", 1))
-    max_raw = float(data.get("max_raw", 100))
+    success_extent = 0.5+(score-35)/40;
+    success_extent = min(success_extent,1)
+    success_extent = max(success_extent,0)
 
-    new_difficulty = select_difficulty(theta_hat, a, target_p, min_raw, max_raw)
+    new_skill = update_skill(success_extent, difficulty, theta_hat)
 
-    return jsonify({"new_difficulty": new_difficulty})
+    new_difficulty = select_difficulty(theta_hat, a, target_p, 1, 100)
+
+    return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill})
