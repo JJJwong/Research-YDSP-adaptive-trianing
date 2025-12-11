@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import numpy as np
 import skfuzzy as fuzz
 from skfuzzy import control as ctrl
@@ -8,6 +9,7 @@ from scipy.optimize import minimize
 # Flask backend
 # ----------------------------
 app = Flask(__name__)
+CORS(app)  # allow all origins
 
 # ----------------------------
 # Game backend state (same as original Colab logic)
