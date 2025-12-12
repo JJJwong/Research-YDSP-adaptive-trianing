@@ -5,3 +5,5 @@ scipy
 scikit-fuzzy
 networkx
 flask-cors
+gspread
+google-auth
