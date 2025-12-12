@@ -4,6 +4,19 @@ import numpy as np
 import skfuzzy as fuzz
 from skfuzzy import control as ctrl
 from scipy.optimize import minimize
+import os
+import gspread
+from google.oauth2.service_account import Credentials
+
+cred_str = os.getenv("API_KEY")   # contains the entire JSON text
+cred_dict = json.loads(cred_str) # convert string → dict
+
+scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+creds = Credentials.from_service_account_info(cred_dict, scopes=scopes)
+client = gspread.authorize(creds)
+
+sheet_id = "1IFBqyjPGztl92D5A-pNssZNmviiEyoq16RPOecg30Kg"
+sheet = client.open_by_key(sheet_id).sheet1
 
 # ----------------------------
 # Flask backend
@@ -105,6 +118,7 @@ def fuzzy_update():
 
     new_difficulty = difficulty + fuzzy_adjust
     new_difficulty = max(1, min(new_difficulty, 100))
+    sheet.append_row([difficulty, theta_hat, score, success_extent, "no"])
 
     return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill})
 
@@ -121,5 +135,6 @@ def irt_update():
     new_skill = update_skill(success_extent, difficulty, theta_hat)
 
     new_difficulty = select_difficulty(theta_hat, a, target_p, 1, 100)
+    sheet.append_row([difficulty, theta_hat, score, success_extent, "yes"])
 
     return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill})
