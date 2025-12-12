@@ -7,6 +7,7 @@ from scipy.optimize import minimize
 import os
 import gspread
 from google.oauth2.service_account import Credentials
+import json
 
 cred_str = os.getenv("API_KEY")   # contains the entire JSON text
 cred_dict = json.loads(cred_str) # convert string → dict
@@ -138,3 +139,4 @@ def irt_update():
     sheet.append_row([difficulty, theta_hat, score, success_extent, "yes"])
 
     return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill})
+
