@@ -8,6 +8,9 @@ import os
 import gspread
 from google.oauth2.service_account import Credentials
 import json
+from dotenv import load_dotenv
+
+load_dotenv()  # take environment variables from .env.
 
 cred_str = os.getenv("API_KEY")   # contains the entire JSON text
 cred_dict = json.loads(cred_str) # convert string → dict
@@ -34,11 +37,11 @@ performance_input = ctrl.Antecedent(np.arange(0,91,0.1), 'performance_input')
 adjustment_output = ctrl.Consequent(np.arange(-15,15,0.1), 'adjustment_output')
 
 performance_input['poor'] = fuzz.gaussmf(performance_input.universe,0,10)
-performance_input['adequate'] = fuzz.gaussmf(performance_input.universe,35,5)
+performance_input['adequate'] = fuzz.gaussmf(performance_input.universe,30,5)
 performance_input['good'] = fuzz.gaussmf(performance_input.universe,90,20)
 
 adjustment_output['decrease'] = fuzz.gaussmf(adjustment_output.universe,-10,2)
-adjustment_output['maintain'] = fuzz.gaussmf(adjustment_output.universe,0,3)
+adjustment_output['maintain'] = fuzz.gaussmf(adjustment_output.universe,0,3.5)
 adjustment_output['increase'] = fuzz.gaussmf(adjustment_output.universe,10,2)
 
 rule1 = ctrl.Rule(performance_input['poor'], adjustment_output['decrease'])
@@ -93,24 +96,35 @@ def select_difficulty(theta_hat,a,target_p=0.7,min_raw=1,max_raw=100):
     b_scaled = np.clip(b_scaled,-3,3)
     return unscale_difficulty(b_scaled,min_raw,max_raw)
 
-def update_skill(success_extent, raw_difficulty, theta_hat):
+def update_skill(success_extent, raw_difficulty, theta_hat, theta_prior):
   scaled_difficulty = scale_difficulty(raw_difficulty)
-  return map_update_theta(theta_hat, a, scaled_difficulty, success_extent, mu0=theta_hat, sigma0=1)
+  return map_update_theta(theta_hat, a, scaled_difficulty, success_extent, mu0=theta_prior, sigma0=1)
 
 # ----------------------------
 # Flask routes
 # ----------------------------
-@app.route("/fuzzy_update", methods=["POST"])
-def fuzzy_update():
-    data = request.json
+
+def preprocess_request(data):
+    user_id = int(data["user_id"])
     difficulty = float(data["difficulty"])
     score = float(data["score"])
     theta_hat = float(data["theta_hat"])
-    success_extent = 0.5+(score-35)/40;
-    success_extent = min(success_extent,1)
-    success_extent = max(success_extent,0)
-    
-    new_skill = update_skill(success_extent, difficulty, theta_hat)
+    theta_prior = float(data["theta_prior"])
+    global_task = int(data["global_task"])
+    local_task = int(data["local_task"])
+
+    success_extent = 1 + (score - 30) / 10
+    success_extent = min(max(success_extent, 0), 1)
+
+    new_skill = update_skill(success_extent, difficulty, theta_hat, theta_prior)
+
+    return user_id, difficulty, score, theta_hat, success_extent, new_skill, global_task, local_task
+
+@app.route("/fuzzy_update", methods=["POST"])
+def fuzzy_update():
+    data = request.json
+    user_id, difficulty, score, theta_hat, success_extent, new_skill, global_task, local_task = preprocess_request(data)
+    sheet.append_row([global_task, difficulty, theta_hat, score, success_extent, "no" if local_task>1 else "yes", user_id])
 
     # --- Fuzzy logic adjustment ---
     diff_change.input["performance_input"] = score
@@ -119,24 +133,19 @@ def fuzzy_update():
 
     new_difficulty = difficulty + fuzzy_adjust
     new_difficulty = max(1, min(new_difficulty, 100))
-    sheet.append_row([difficulty, theta_hat, score, success_extent, "no"])
 
-    return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill})
+    return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill, "new_scaled_skill": select_difficulty(new_skill, a, target_p, 1, 100)})
 
 @app.route("/irt_update", methods=["POST"])
 def irt_update():
     data = request.json
-    difficulty = float(data["difficulty"])
-    score = float(data["score"])
-    theta_hat = float(data["theta_hat"])
-    success_extent = 0.5+(score-35)/40;
-    success_extent = min(success_extent,1)
-    success_extent = max(success_extent,0)
+    user_id, difficulty, score, theta_hat, success_extent, new_skill, global_task, local_task = preprocess_request(data)
+    if difficulty > -1:
+        sheet.append_row([global_task, difficulty, theta_hat, score, success_extent, "no", user_id])
+    
+    new_difficulty = select_difficulty(new_skill if difficulty>-1 else theta_hat, a, target_p, 1, 100)
 
-    new_skill = update_skill(success_extent, difficulty, theta_hat)
+    return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill, "new_scaled_skill": new_difficulty})
 
-    new_difficulty = select_difficulty(theta_hat, a, target_p, 1, 100)
-    sheet.append_row([difficulty, theta_hat, score, success_extent, "yes"])
-
-    return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill})
-
+if __name__ == "__main__":
+    app.run(debug=True)
