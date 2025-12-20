@@ -8,6 +8,7 @@ import os
 import gspread
 from google.oauth2.service_account import Credentials
 import json
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env.
@@ -22,15 +23,11 @@ client = gspread.authorize(creds)
 sheet_id = "1IFBqyjPGztl92D5A-pNssZNmviiEyoq16RPOecg30Kg"
 sheet = client.open_by_key(sheet_id).sheet1
 
-# ----------------------------
 # Flask backend
-# ----------------------------
 app = Flask(__name__)
 CORS(app)  # allow all origins
 
-# ----------------------------
 # Game backend state (same as original Colab logic)
-# ----------------------------
 
 # Fuzzy logic setup
 performance_input = ctrl.Antecedent(np.arange(0,91,0.1), 'performance_input')
@@ -52,7 +49,7 @@ difficulty_ctrl = ctrl.ControlSystem([rule1,rule2,rule3])
 diff_change = ctrl.ControlSystemSimulation(difficulty_ctrl)
 
 # IRT skill tracking
-a = 1.0
+a = 1
 target_p = 0.7
 
 def adjust_difficulty(val):
@@ -100,9 +97,7 @@ def update_skill(success_extent, raw_difficulty, theta_hat, theta_prior):
   scaled_difficulty = scale_difficulty(raw_difficulty)
   return map_update_theta(theta_hat, a, scaled_difficulty, success_extent, mu0=theta_prior, sigma0=1)
 
-# ----------------------------
 # Flask routes
-# ----------------------------
 
 def preprocess_request(data):
     user_id = int(data["user_id"])
@@ -120,11 +115,15 @@ def preprocess_request(data):
 
     return user_id, difficulty, score, theta_hat, success_extent, new_skill, global_task, local_task
 
+@app.route("/")
+def home():
+    return "OK", 200
+
 @app.route("/fuzzy_update", methods=["POST"])
 def fuzzy_update():
     data = request.json
     user_id, difficulty, score, theta_hat, success_extent, new_skill, global_task, local_task = preprocess_request(data)
-    sheet.append_row([global_task, difficulty, theta_hat, score, success_extent, "no" if local_task>1 else "yes", user_id])
+    sheet.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), global_task, difficulty, theta_hat, score, success_extent, "no" if local_task>1 else "yes", user_id])
 
     # --- Fuzzy logic adjustment ---
     diff_change.input["performance_input"] = score
@@ -132,6 +131,16 @@ def fuzzy_update():
     fuzzy_adjust = diff_change.output["adjustment_output"]
 
     new_difficulty = difficulty + fuzzy_adjust
+
+    # Special condition if user_id is even (test the 1-up 1-down approach instead)
+    if user_id % 2 == 0:
+        if score == 30:
+            new_difficulty = difficulty
+        elif score < 30:
+            new_difficulty = difficulty - 5
+        else:
+            new_difficulty = difficulty + 5
+
     new_difficulty = max(1, min(new_difficulty, 100))
 
     return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill, "new_scaled_skill": select_difficulty(new_skill, a, target_p, 1, 100)})
@@ -141,11 +150,11 @@ def irt_update():
     data = request.json
     user_id, difficulty, score, theta_hat, success_extent, new_skill, global_task, local_task = preprocess_request(data)
     if difficulty > -1:
-        sheet.append_row([global_task, difficulty, theta_hat, score, success_extent, "no", user_id])
+        sheet.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), global_task, difficulty, theta_hat, score, success_extent, "no", user_id])
     
     new_difficulty = select_difficulty(new_skill if difficulty>-1 else theta_hat, a, target_p, 1, 100)
 
     return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill, "new_scaled_skill": new_difficulty})
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True)    
