@@ -137,9 +137,9 @@ def fuzzy_update():
         if score == 30:
             new_difficulty = difficulty
         elif score < 30:
-            new_difficulty = difficulty - 5
+            new_difficulty = difficulty - 10
         else:
-            new_difficulty = difficulty + 5
+            new_difficulty = difficulty + 10
 
     new_difficulty = max(1, min(new_difficulty, 100))
 
@@ -157,4 +157,5 @@ def irt_update():
     return jsonify({"new_difficulty": new_difficulty, "new_skill": new_skill, "new_scaled_skill": new_difficulty})
 
 if __name__ == "__main__":
+
     app.run(debug=True)    
