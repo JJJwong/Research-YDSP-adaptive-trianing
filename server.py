@@ -100,7 +100,7 @@ def update_skill(success_extent, raw_difficulty, theta_hat, theta_prior):
 # Flask routes
 
 def preprocess_request(data):
-    user_id = str(data["user_id"])
+    user_id = int(data["user_id"])
     difficulty = float(data["difficulty"])
     score = float(data["score"])
     theta_hat = float(data["theta_hat"])
@@ -123,7 +123,7 @@ def home():
 def fuzzy_update():
     data = request.json
     user_id, difficulty, score, theta_hat, success_extent, new_skill, global_task, local_task = preprocess_request(data)
-    sheet.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), global_task, difficulty, theta_hat, score, success_extent, "no" if local_task>1 else "yes", user_id])
+    sheet.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), global_task, difficulty, theta_hat, score, success_extent, "no" if local_task>1 else "yes", str(user_id)])
 
     # --- Fuzzy logic adjustment ---
     diff_change.input["performance_input"] = score
@@ -150,7 +150,7 @@ def irt_update():
     data = request.json
     user_id, difficulty, score, theta_hat, success_extent, new_skill, global_task, local_task = preprocess_request(data)
     if difficulty > -1:
-        sheet.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), global_task, difficulty, theta_hat, score, success_extent, "no", user_id])
+        sheet.append_row([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), global_task, difficulty, theta_hat, score, success_extent, "no", str(user_id)])
     
     new_difficulty = select_difficulty(new_skill if difficulty>-1 else theta_hat, a, target_p, 1, 100)
 
