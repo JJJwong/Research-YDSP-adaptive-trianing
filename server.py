@@ -100,7 +100,7 @@ def update_skill(success_extent, raw_difficulty, theta_hat, theta_prior):
 # Flask routes
 
 def preprocess_request(data):
-    user_id = int(data["user_id"])
+    user_id = str(data["user_id"])
     difficulty = float(data["difficulty"])
     score = float(data["score"])
     theta_hat = float(data["theta_hat"])
